@@ -3,7 +3,7 @@
 下载：[Release](https://github.com/zhcode-fun/wireguard-windows/releases)
 
 + srv记录：设置端口号为0，例如
-+ 
+  
 ```
 Endpoint = srv.wg.xxxx.com:0
 ```
@@ -15,9 +15,10 @@ Endpoint = txt.wg.xxxx.com:1
 ```
 text记录值可以是纯`ip:port`，也可以在后面添加其他备注，以`||`分割，如`1.1.1.1:6789 || 更新于2024-09-12 20:30:00`
 
-> 不会golang，一边查语法一边写的，代码太烂，好在改的不多🤣
 
-**************************************分割线，下面是官方README******************************
+---
+---
+
 
 # [WireGuard](https://www.wireguard.com/) for Windows
 
