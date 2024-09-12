@@ -7,7 +7,9 @@ package conf
 
 import (
 	"log"
+	"net"
 	"net/netip"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -85,13 +87,74 @@ func resolveHostnameOnce(name string) (resolvedIPString string, err error) {
 	return
 }
 
+func resolveSrvRecord(name string) (resolvedIPString string, resolvedPort uint16, err error) {
+	maxTries := 10
+	if services.StartedAtBoot() {
+		maxTries *= 4
+	}
+	var resolvedTargetString string
+	resolvedTargetString, resolvedPort, err = resolveSrvRecordOnce(name)
+	if err != nil {
+		return
+	}
+	resolvedIPString, err = resolveHostname(resolvedTargetString)
+	return resolvedIPString, resolvedPort, err
+}
+
+func resolveSrvRecordOnce(name string) (resolvedTargetString string, resolvedPort uint16, err error) {
+	_, records, err := net.LookupSRV("", "", name)
+	if err != nil {
+		return
+	}
+	if len(records) > 0 {
+		resolvedTargetString = records[0].Target
+		resolvedPort = records[0].Port
+	}
+	return
+}
+
+func resolveTxtRecordOnce(name string) (resolvedTargetString string, resolvedPort uint16, err error) {
+	records, err := net.LookupTXT(name)
+	if err != nil {
+		return
+	}
+	if len(records) > 0 {
+		targetString := records[0]
+		if strings.Contains(records[0], "||") {
+			resolvedTargetStrings := strings.Split(records[0], "||")
+			targetString = resolvedTargetStrings[0]
+		}
+		i := strings.LastIndexByte(targetString, ':')
+		if i >= 0 {
+			targetString = strings.TrimSpace(targetString)
+			var resolvedPortStr string
+			resolvedTargetString, resolvedPortStr = targetString[:i], targetString[i+1:]
+			resolvedPort, err = parsePort(resolvedPortStr)
+			if err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
 func (config *Config) ResolveEndpoints() error {
 	for i := range config.Peers {
 		if config.Peers[i].Endpoint.IsEmpty() {
 			continue
 		}
 		var err error
-		config.Peers[i].Endpoint.Host, err = resolveHostname(config.Peers[i].Endpoint.Host)
+		if config.Peers[i].Endpoint.Port == 0 {
+			// srv记录
+			log.Printf("SRV record start resolve...")
+			config.Peers[i].Endpoint.Host, config.Peers[i].Endpoint.Port, err = resolveSrvRecord(config.Peers[i].Endpoint.Host)
+		} else if config.Peers[i].Endpoint.Port == 1 {
+			// txt记录
+			log.Printf("TXT record start resolve...")
+			config.Peers[i].Endpoint.Host, config.Peers[i].Endpoint.Port, err = resolveTxtRecordOnce(config.Peers[i].Endpoint.Host)
+		} else {
+			config.Peers[i].Endpoint.Host, err = resolveHostname(config.Peers[i].Endpoint.Host)
+		}
 		if err != nil {
 			return err
 		}
