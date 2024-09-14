@@ -93,9 +93,16 @@ func resolveSrvRecord(name string) (resolvedIPString string, resolvedPort uint16
 		maxTries *= 4
 	}
 	var resolvedTargetString string
-	resolvedTargetString, resolvedPort, err = resolveSrvRecordOnce(name)
-	if err != nil {
-		return
+	for i := 0; i < maxTries; i++ {
+		if i > 0 {
+			time.Sleep(time.Second * 4)
+		}
+		resolvedTargetString, resolvedPort, err = resolveSrvRecordOnce(name)
+		if err != nil {
+			continue
+		} else if resolvedTargetString != "" && resolvedPort != 0 {
+			break
+		}
 	}
 	resolvedIPString, err = resolveHostname(resolvedTargetString)
 	return resolvedIPString, resolvedPort, err
@@ -109,6 +116,25 @@ func resolveSrvRecordOnce(name string) (resolvedTargetString string, resolvedPor
 	if len(records) > 0 {
 		resolvedTargetString = records[0].Target
 		resolvedPort = records[0].Port
+	}
+	return
+}
+
+func resolveTxtRecord(name string) (resolvedTargetString string, resolvedPort uint16, err error) {
+	maxTries := 10
+	if services.StartedAtBoot() {
+		maxTries *= 4
+	}
+	for i := 0; i < maxTries; i++ {
+		if i > 0 {
+			time.Sleep(time.Second * 4)
+		}
+		resolvedTargetString, resolvedPort, err = resolveTxtRecordOnce(name)
+		if err != nil {
+			continue
+		} else if resolvedTargetString != "" && resolvedPort != 0 {
+			break
+		}
 	}
 	return
 }
@@ -151,7 +177,7 @@ func (config *Config) ResolveEndpoints() error {
 		} else if config.Peers[i].Endpoint.Port == 1 {
 			// txt记录
 			log.Printf("TXT record start resolve...")
-			config.Peers[i].Endpoint.Host, config.Peers[i].Endpoint.Port, err = resolveTxtRecordOnce(config.Peers[i].Endpoint.Host)
+			config.Peers[i].Endpoint.Host, config.Peers[i].Endpoint.Port, err = resolveTxtRecord(config.Peers[i].Endpoint.Host)
 		} else {
 			config.Peers[i].Endpoint.Host, err = resolveHostname(config.Peers[i].Endpoint.Host)
 		}
